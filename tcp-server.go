@@ -20,6 +20,9 @@ func main() {
 }
 
 func startServer(serverProto string, serverPort string) {
+	connectionsNumber := 0
+	connections := make(map[int]net.Conn, 1024)
+
 	fmt.Println("Starting the TCP server")
 
 	// Start listening the port
@@ -37,13 +40,18 @@ func startServer(serverProto string, serverPort string) {
 		} else {
 			log.Println("Client " + connection.RemoteAddr().String() + " connected")
 
-			go handleConnection(connection)
+			// Adding each connection into pool
+			//connections = append(connections, connection)
+			connections[connectionsNumber] = connection
+			connectionsNumber++
+
+			go handleConnection(connection, connections)
 		}
 	}
 }
 
 // handleConnection - is processing the received connection
-func handleConnection(connection net.Conn) {
+func handleConnection(connection net.Conn, connections map[int]net.Conn) {
 	for {
 		// Listening all messages which end on the "\n"
 		message, wsReaderErr := bufio.NewReader(connection).ReadString('\n')
@@ -60,11 +68,16 @@ func handleConnection(connection net.Conn) {
 		// Printing the message into terminal
 		fmt.Println("Client " + connection.RemoteAddr().String() + " say: ", message)
 
-		// Writing the received message back into websocket
-		_, writerErr := connection.Write([]byte(strings.ToUpper(message) + "\n"))
-		if writerErr != nil {
-			log.Println("Error occurred while writing message into websocket: ", writerErr.Error())
-			return
+		for _, eachConnection := range connections {
+			if eachConnection != connection {
+				// Writing the received message back into websocket
+				_, writerErr := eachConnection.Write([]byte(strings.ToUpper(message) + "\n"))
+				if writerErr != nil {
+					log.Println("Error occurred while writing message into websocket: ", writerErr.Error())
+					return
+				}
+			}
 		}
 	}
 }
+
